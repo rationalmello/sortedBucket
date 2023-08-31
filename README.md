@@ -52,7 +52,8 @@ $ cmake --build "build" --config Release
 You can then view the build files (it is named ```bench```) inside the ```build```
 folder. (If you're using Visual Studio like me, there will be the sortedBucket 
 solution file there. Make sure you set "bench" as the startup project and build as
-Release.)
+Release.) Make sure at least C++20 flag is set for your compiler or else you'll have
+build issues.
 
 
 ## My results
