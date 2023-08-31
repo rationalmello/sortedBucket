@@ -1,5 +1,6 @@
 # snips
 *.png
+.txt
 
 # debug files
 debug/
