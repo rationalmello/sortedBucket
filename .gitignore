@@ -7,6 +7,7 @@ debug/
 
 # build files
 build/
+*.exe
 
 # google benchmark deps
 benchmark/

@@ -49,7 +49,7 @@ public:
         init();
     }
 
-    SortedBucketVV(const SortedBucketVV<T>& old) {
+    SortedBucketVV(const SortedBucketVV<T, Comp>& old) {
         init();
         buckets = old.buckets;
         sz = old.sz;
@@ -57,7 +57,7 @@ public:
         bucketDensity = old.bucketDensity;
     }
 
-    SortedBucketVV(SortedBucketVV<T>&& old) noexcept {
+    SortedBucketVV(SortedBucketVV<T, Comp>&& old) noexcept {
         buckets.swap(old.buckets);
         sz = old.sz;
         capacity = old.capacity;
@@ -420,7 +420,7 @@ private:
             shiftRight = targSupplied && 
                          (std::distance(targetBucket->begin(), targ) >= bucketDensity);
             typename std::vector<std::vector<T>>::iterator next = 
-                buckets.emplace(std::next(targetBucket), std::vector<T>());
+                buckets.emplace(std::next(targetBucket), std::vector<T, Alloc>());
             next->reserve(2*bucketDensity + 4);
             /* targetBucket may be invalidated if a vector reallocation occurred 
                 on buckets, but the return iterator next is guaranteed to be 
@@ -458,7 +458,7 @@ private:
     }
 
     // Private members
-    std::vector<std::vector<T>> buckets;
+    std::vector<std::vector<T, Alloc>> buckets;
     size_t sz {0};
     size_t capacity {0};
     size_t bucketDensity {DefaultSmallDensity};

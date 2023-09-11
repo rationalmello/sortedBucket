@@ -49,7 +49,7 @@ public:
         init();
     }
 
-    SortedBucketLL(const SortedBucketLL<T>& old) {
+    SortedBucketLL(const SortedBucketLL<T, Comp>& old) {
         init();
         buckets = old.buckets;
         sz = old.sz;
@@ -100,7 +100,7 @@ public:
         bucketDensity = std::max(DefaultSmallDensity,
                                 static_cast<size_t>(std::sqrt(cap)));
         if (sz > 0) {
-            typename std::list<std::list<T>>::iterator b = buckets.begin();
+            typename std::list<std::list<T, Alloc>>::iterator b = buckets.begin();
             while (b != buckets.end()) {
                 /*  Guaranteed no empty buckets if sz > 0, so track the first elem
                     of each bucket. For list implementation, iterators remain 
@@ -396,7 +396,7 @@ private:
                 ++mid;
             }
             typename std::list<std::list<T>>::iterator next = 
-                buckets.emplace(std::next(targetBucket), std::list<T>());
+                buckets.emplace(std::next(targetBucket), std::list<T, Alloc>());
             next->splice(next->begin(), *targetBucket, mid, targetBucket->end());
         }
         else if (targetBucket->size() < bucketDensity / 2) {
@@ -423,7 +423,7 @@ private:
     }
 
     // Private members
-    std::list<std::list<T>> buckets;
+    std::list<std::list<T, Alloc>> buckets;
     size_t sz {0};
     size_t capacity {0};
     size_t bucketDensity {DefaultSmallDensity};

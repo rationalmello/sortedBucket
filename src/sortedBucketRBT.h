@@ -40,6 +40,12 @@ template <typename T,
           typename Alloc    = std::allocator<T>>
 class SortedBucketRBT {
 public:
+    /* Note: creating new Nodes will share the allocator defined for the value 
+        of type T. I consider the Node as just containing a bit of bookkeeping 
+        information for the RB tree, so this seems reasonable. In certain cases
+        though, it may ruin alignment or the few bytes of extra data may mess with
+        a very fine-funed custom allocator, but for now I am using this.
+    */
     struct Node {
         Node(const T& val, Node* par, unsigned char color, size_t copies = 1) 
             : val(val)
@@ -127,7 +133,10 @@ public:
         sz += copies;
         int dist = 0;
         if (!root) {
-            root = new Node(n, nullptr, Black, copies);
+            root = reinterpret_cast<Node*>(std::allocator_traits<Alloc>::allocate(
+                alloc, sizeof(Node)));
+            std::allocator_traits<Alloc>::construct(alloc, root, 
+                n, nullptr, Black, copies);
             return std::make_pair(root, 0);
         }
         Node* node = root;
@@ -139,7 +148,11 @@ public:
             }
             if (Comp{} (n, node->val)) {
                 if (!node->left) {
-                    node->left = new Node(n, node, Red, copies);
+                    node->left = reinterpret_cast<Node*>(
+                        std::allocator_traits<Alloc>::allocate(
+                        alloc, sizeof(Node), /* hint location */ node));
+                    std::allocator_traits<Alloc>::construct(alloc, node->left, 
+                        n, node, Red, copies);
                     balanceDoubleRed(node->left);
                     return std::make_pair(node->left, dist);
                 }
@@ -149,7 +162,11 @@ public:
                 dist += (node->left) ? node->left->mass : 0;
                 dist += node->copies;
                 if (!node->right) {
-                    node->right = new Node(n, node, Red, copies);
+                    node->right = reinterpret_cast<Node*>(
+                        std::allocator_traits<Alloc>::allocate(
+                        alloc, sizeof(Node), /* hint location */ node));
+                    std::allocator_traits<Alloc>::construct(alloc, node->right, 
+                        n, node, Red, copies);
                     balanceDoubleRed(node->right);
                     return std::make_pair(node->right, dist);
                 }
@@ -163,7 +180,10 @@ public:
         sz += copies;
         int dist = 0;
         if (!root) {
-            root = new Node(n, nullptr, Black, copies);
+            root = reinterpret_cast<Node*>(std::allocator_traits<Alloc>::allocate(
+                alloc, sizeof(Node)));
+            std::allocator_traits<Alloc>::construct(alloc, root, 
+                n, nullptr, Black, copies);
             return std::make_pair(root, 0);
         }
         Node* node = root;
@@ -175,7 +195,11 @@ public:
             }
             if (Comp{} (n, node->val)) {
                 if (!node->left) {
-                    node->left = new Node(n, node, Red, copies);
+                    node->left = reinterpret_cast<Node*>(
+                        std::allocator_traits<Alloc>::allocate(
+                        alloc, sizeof(Node), /* hint location */ node));
+                    std::allocator_traits<Alloc>::construct(alloc, node->left, 
+                        n, node, Red, copies);
                     balanceDoubleRed(node->left);
                     return std::make_pair(node->left, dist);
                 }
@@ -185,7 +209,11 @@ public:
                 dist += (node->left) ? node->left->mass : 0;
                 dist += node->copies;
                 if (!node->right) {
-                    node->right = new Node(n, node, Red, copies);
+                    node->right = reinterpret_cast<Node*>(
+                        std::allocator_traits<Alloc>::allocate(
+                        alloc, sizeof(Node), /* hint location */ node));
+                    std::allocator_traits<Alloc>::construct(alloc, node->right, 
+                        n, node, Red, copies);
                     balanceDoubleRed(node->right);
                     return std::make_pair(node->right, dist);
                 }
@@ -746,6 +774,7 @@ private:
     }
 
     // Private members
+    Alloc alloc; // since we handle creation of value container (aka nodes)
     Node* root {nullptr};
     size_t sz {0};
 };
