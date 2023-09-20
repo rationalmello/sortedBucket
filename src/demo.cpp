@@ -3,8 +3,8 @@
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
  * @brief Demo for functionality of Sorted Containers
- * @version 1.0
- * @date 2023-08-27
+ * @version 1.1
+ * @date 2023-09-19
  * 
  * 
  * Demonstrating the usage of the different implementations of Sorted Containers.
@@ -18,9 +18,9 @@
 #include "sortedBucketLL.h"
 #include "sortedBucketVV.h"
 
-#define DEMO_RBT    // Prints out RBT implemenation demo
-#define DEMO_LL     // Prints out LL implemenation demo
-#define DEMO_VV     // Prints out VV implemenation demo
+#define DEMO_RBT    // Prints out RBT implementation demo
+#define DEMO_LL     // Prints out LL implementation demo
+#define DEMO_VV     // Prints out VV implementation demo
 
 #ifdef DEBUG
 using namespace std; // only for the demo, sue me :)
@@ -63,6 +63,13 @@ int main() {
     cout << "idx of first occurence of " << 6 << " is " << rbt.distance(6) 
     << endl;
     cout << endl;
+
+    cout << "Iterating from an element till the end of tree: " << endl;
+    SortedBucketRBT<int>::Iterator rbtIt = rbt.find(10);
+    for (auto it = rbtIt; it != rbt.end(); ++it) {
+        cout << *it << " with " << it.copies() << " copies " << endl;
+    }
+    cout << endl;
 #endif // DEMO_RBT
 
 
@@ -70,14 +77,15 @@ int main() {
     cout << "After range constructing SortedBucketLL: " << endl;
     SortedBucketLL<int> ll(v3.begin(), v3.end());
     ll.print();
-    SortedBucketLL<int> ll2(move(ll));
 
+    SortedBucketLL<int> ll2(move(ll));
+    
     cout << "After changing density of move-constructed SortedBucketLL2: " << endl;
     ll2.forceDensity(4); // force a small density to observe balancing
     ll2.print("SortedBucketLL Number 2");
+       
     ll2.erase(12);
     ll2.print("SortedBucketLL Number 2");
-
     int llDist1 = ll2.distance(10), llDist2 = ll2.distance(11);
     if (llDist1 != -1) 
         cout << "the sorted index of 10 is " << llDist1 << endl;
@@ -87,15 +95,21 @@ int main() {
         cout << "the sorted index of 11 is " << llDist2 << endl;
     else 
         cout << "11 is not present" << endl;
-
-    auto [llBucket, llTarg] = ll2.find(15);
-    if (llBucket == ll2.getBucketsEnd())
-    /*  Bandaid fix to access end of private buckets until iterator 
-        interface is made */
+    SortedBucketLL<int>::Iterator llIt = ll2.find(15);
+    if (llIt == ll2.end())
         cout << "15 is not present" << endl;
     else 
-        cout << "15 found with val " << *llTarg << endl;
+        cout << "15 found with val " << *llIt << endl;
     cout << endl;
+
+    
+    cout << "Iterating from an element till the end: " << endl;
+    llIt = ll2.find(10);
+    for (auto it = llIt; it != ll2.end(); ++it) {
+        cout << *it << endl;
+    }
+    cout << endl;
+    
 #endif // DEMO_LL
 
 
@@ -115,7 +129,7 @@ int main() {
     cout << "After inserting into largest bucket " << endl;
     vv.insert(50);
     vv.insert(55);
-    vv.print();
+    vv.print(); 
 
     cout << "After erasing some elements" << endl;
     vv.erase(6);
@@ -139,15 +153,23 @@ int main() {
         cout << "20 is not present" << endl;
     cout << endl;
 
-    auto [vvBucket, vvTarg] = vv.find(30);
-    if (vvBucket == vv.getBucketsEnd()) 
-    /*  Bandaid fix to access end of private buckets until iterator 
-        interface is made */
+    SortedBucketVV<int>::Iterator vvIt = vv.find(30);
+    if (vvIt == vv.end()) 
         cout << "30 is not present" << endl;
     else 
-        cout << "30 found with val " << *vvTarg << endl;
+        cout << "30 found with val " << *vvIt << endl;
     cout << endl;
 
+    cout << "Iterating from an element down till the start: " << endl;
+    vvIt = vv.find(10);
+    while (vvIt > vv.begin()) {
+        cout << *vvIt << endl;
+        --vvIt;
+    }
+    // Cannot decrement iterator past begin, so print again (is begin) and done.
+    cout << *vvIt << endl;
+    
+    cout << endl;
 #endif // DEMO_VV
 
     return 0;

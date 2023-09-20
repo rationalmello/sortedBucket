@@ -3,22 +3,22 @@
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
  * @brief Implementation of Sorted Bucket container using std::vector of vectors
- * @version 1.0
- * @date 2023-08-27
+ * @version 1.1
+ * @date 2023-09-19
  * 
  * 
  * Container provides sub-linear time lookup, distance, insertion, deletion.
  * Credit to Grant Jenks for his SortedContainers idea for Python (found at 
  * https://grantjenks.com/docs/sortedcontainers/sortedlist.html) which I
- * used as an inspiration.
+ * used as inspiration.
  * 
  * Time complexities:
- *      find:       O(sqrt(n))
+ *      find:       O(log(sqrt(n)))
  *      distance:   O(sqrt(n))
- *      insert:     O(sqrt(n))
- *      erase:      O(sqrt(n))
+ *      insert:     O(log(sqrt(n)))
+ *      erase:      O(log(sqrt(n)))
  * 
- * @todo bidirectional iterator interface
+ * 
  */
 
 #ifndef UTIL_SORTED_BUCKET_VV_H
@@ -26,7 +26,7 @@
 
 /* 
     The default bucket size. Note this cannot be a template argument because it 
-    would invalidate the move constructor taking a SortedBucketLL with a 
+    would invalidate the move constructor taking a SortedBucketVV with a 
     different bucket size.
 */
 #define DefaultSmallDensity (size_t(500))
@@ -36,6 +36,7 @@
 
 #define DEBUG
 #ifdef DEBUG
+#define SENTINEL_FLAG 99999 // value for sentinel, otherwise it uses default T().
 #include <iostream>
 #include <string>
 #endif
@@ -45,32 +46,168 @@ template <typename T,
           typename Alloc    = std::allocator<T>>
 class SortedBucketVV {
 public:
-    SortedBucketVV() {
+    friend struct Iterator;
+    struct Iterator {
+        friend class SortedBucketVV;
+        /* todo: might make this random access iterator in a future release */
+        using iterator_category = std::bidirectional_iterator_tag;
+        using value_type        = T;
+        /*  difference_type is included here for compliance with iterator_traits,
+            but distance should be calculated from SortedBucketVV::distance()
+            for runtime in O(log(n)) rather than O(n)   */
+        using difference_type   = std::ptrdiff_t; 
+        using pointer           = value_type*;
+        using const_pointer     = value_type const*;
+        using reference         = value_type&;
+        using const_reference   = value_type const&;
+
+        Iterator() noexcept {}
+
+        Iterator(typename std::vector<std::vector<T>>::iterator targetBucket,
+                 typename std::vector<T>::iterator targ) noexcept
+            : targetBucket(targetBucket)
+            , targ(targ) {}
+
+        Iterator(const Iterator& other) noexcept
+            : targetBucket(other.targetBucket)
+            , targ(other.targ) {}
+
+        inline reference operator *() noexcept {
+            return *targ;
+        }
+
+        inline const_reference operator *() const noexcept {
+            return *targ;
+        }
+
+        inline pointer operator ->() {
+            return std::addressof(*targ);
+        }
+
+        inline const_pointer operator ->() const {
+            return std::addressof(*targ);
+        }
+        
+        inline bool operator ==(const Iterator other) const noexcept {
+            return (targetBucket        == other.targetBucket && 
+                    targ                == other.targ);
+        }
+
+        inline bool operator <(const Iterator other) const noexcept {
+            return targetBucket < other.targetBucket ||
+                (targetBucket == other.targetBucket &&
+                    targ < other.targ);
+        }
+
+        inline bool operator >(const Iterator other) const noexcept {
+            return targetBucket > other.targetBucket ||
+                (targetBucket == other.targetBucket &&
+                    targ > other.targ);
+        }
+
+        inline bool operator <=(const Iterator other) const noexcept {
+            return targetBucket < other.targetBucket ||
+                   (targetBucket == other.targetBucket &&
+                   targ <= other.targ);
+        }
+
+        inline bool operator >=(const Iterator other) const noexcept {
+            return targetBucket > other.targetBucket ||
+                   (targetBucket == other.targetBucket &&
+                   targ >= other.targ);
+        }
+
+        inline bool operator !=(const Iterator other) const noexcept {
+            return !(*this == other);
+        }
+
+        inline void operator =(const Iterator other) noexcept {
+            targetBucket = other.targetBucket;
+            targ = other.targ;
+        }
+
+        /*  Pre-increment. Calling this on SortedBucketVV::end() may segfault, 
+            so requires checks like in STL containers */
+        Iterator& operator ++() {
+            ++targ;
+            if (targ == targetBucket->end()) {
+                ++targetBucket;
+                targ = targetBucket->begin();
+            }
+            return *this;
+        }
+
+        /*  Post-increment. Calling this on SortedBucketVV::end() may segfault, 
+            so requires checks like in STL containers */
+        Iterator operator ++(int) {
+            Iterator temp = *this;
+            operator++();
+            return temp;
+        }
+
+        /*  Pre-decrement. Calling this on SortedBucketVV::begin() may segfault, 
+            so requires checks like in STL containers */
+        Iterator& operator --() {
+            if (targ == targetBucket->begin()) {
+                --targetBucket;
+                targ = std::prev(targetBucket->end());
+            }
+            else {
+                --targ;
+            }
+            return *this;
+        }
+
+        /*  Post-decrement. Calling this on SortedBucketVV::begin() may segfault, 
+            so requires checks like in STL containers */
+        Iterator operator --(int) {
+            Iterator temp = *this;
+            operator--();
+            return temp;
+        }
+
+    private:
+        typename std::vector<std::vector<value_type>>::iterator     targetBucket
+            {typename std::vector<std::vector<value_type>>::iterator(nullptr)};
+        typename std::vector<value_type>::iterator                  targ
+            {typename std::vector<value_type>::iterator             (nullptr)};
+    };
+
+    /* Default constructor */
+    SortedBucketVV() noexcept {
         init();
     }
 
-    SortedBucketVV(const SortedBucketVV<T, Comp>& old) {
+    /* Copy constructor */
+    explicit SortedBucketVV(const SortedBucketVV<T, Comp>& old) noexcept {
         init();
         buckets = old.buckets;
         sz = old.sz;
         capacity = old.capacity;
         bucketDensity = old.bucketDensity;
+        /* populate sentinel */
+        init();
     }
 
-    SortedBucketVV(SortedBucketVV<T, Comp>&& old) noexcept {
+    /* Move constructor */
+    explicit SortedBucketVV(SortedBucketVV<T, Comp>&& old) noexcept {
         buckets.swap(old.buckets);
         sz = old.sz;
         capacity = old.capacity;
         bucketDensity = old.bucketDensity;
     }
 
-    explicit SortedBucketVV(size_t cap)
+    /* Capacity constructor */
+    explicit SortedBucketVV(size_t cap) noexcept 
         : capacity(cap)
         , bucketDensity(std::max(DefaultSmallDensity, 
-                        static_cast<size_t>(std::sqrt(cap)))) {init();}
+                        static_cast<size_t>(std::sqrt(cap)))) {
+        init();
+    }
     
+    /* Range constructor */
     template<class InputIterator>
-    SortedBucketVV(InputIterator beginIt, InputIterator endIt, size_t cap = 25000)
+    SortedBucketVV(InputIterator beginIt, InputIterator endIt, size_t cap = 25000) noexcept 
         : capacity(cap)
         , bucketDensity(std::max(DefaultSmallDensity, 
                                  static_cast<size_t>(std::sqrt(cap)))) {
@@ -80,12 +217,40 @@ public:
         }
     }
     
-    size_t size() const {
+    /* Default destructor */
+    ~SortedBucketVV() noexcept {}
+
+    /* Size getter */
+    size_t size() const noexcept {
         return sz;
     }
 
-    size_t getDensity() const {
+    /* Density getter */
+    size_t getDensity() const noexcept {
         return bucketDensity;
+    }
+
+    /* Begin getter */
+    inline Iterator begin() noexcept {
+        typename std::vector<std::vector<T>>::iterator targetBucket = buckets.begin();
+        return Iterator(targetBucket, targetBucket->begin());
+    }
+
+    /* End getter */
+    inline Iterator end() noexcept {
+        return Iterator(std::prev(buckets.end()), endSentinel);
+    }
+    
+    /*  Front element access. Calling front() on an empty SortedBucketVV will cause
+        segfault, just like with other STL containers */
+    inline T& front() noexcept {
+        return buckets.front().front();
+    }
+
+    /*  Back element access. Calling back() on an empty SortedBucketVV will cause
+        segfault, just like with other STL containers */
+    inline T& back() noexcept {
+        *std::prev(buckets.back().end());
     }
 
     /*
@@ -105,10 +270,90 @@ public:
                     point to the next bucket if the old one was undersized and 
                     got merged (since vector iterators are equivalent to indexes).
                     If so, we would stay in the same iterator */
-                if (!balance(b))
+                if (!balance(b)) {
                     ++b;
+                }
             }
         }
+    }
+
+    /* 
+        lowerBound() runs in O(log(sqrt(n))) time and returns the first iterator 
+        which satisfies: (element < n) or Comp{}(element, n) is false).
+    */
+    Iterator lowerBound(const T& n) {
+        /*  Sentinel is last item of last bucket, so need to exclude from search */
+        int dist = 0;
+        typename std::vector<std::vector<T>>::iterator targetBucket = buckets.begin();
+        typename std::vector<std::vector<T>>::iterator sentinelBucket = 
+            std::prev(buckets.end());
+        if (buckets.size() > 1) {
+            targetBucket = std::lower_bound(buckets.begin(), sentinelBucket, n,
+                [&](const std::vector<T>& bucket, const T& n) 
+                { return bucket.empty() || Comp{} (bucket.back(), n); });
+        }
+        // Find insertion point within targetBucket
+        typename std::vector<T>::iterator end = targetBucket->end();
+        if (std::next(targetBucket) == buckets.end()) {
+            /* If here, then we are in sentinel bucket. Exclude sentinel from search */
+            --end;
+        }
+        typename std::vector<T>::iterator targ = 
+            std::lower_bound(targetBucket->begin(), end, n,
+            [&](const T& elem, const T& n) { return Comp{} (elem, n); });
+
+        if (targ == targetBucket->end()) { 
+            // point to beginning of next bucket rather than end of this bucket.
+            ++targetBucket;
+            targ = targetBucket->begin();
+        }
+        return Iterator(targetBucket, targ);
+    }
+    
+    /* 
+        upperBound() runs in O(log(sqrt(n))) time and returns the first iterator which
+        satisfies: (n < element) or Comp{}(n, element) is true)
+    */
+    Iterator upperBound(const T& n) {
+        /*  Sentinel is last item of last bucket, so need to exclude from search */
+        int dist = 0;
+        typename std::vector<std::vector<T>>::iterator targetBucket = buckets.begin();
+        typename std::vector<std::vector<T>>::iterator sentinelBucket = 
+            std::prev(buckets.end());
+        if (buckets.size() > 1) {
+            targetBucket = std::upper_bound(buckets.begin(), buckets.end(), n,
+                [&](const T& n, const std::vector<T>& bucket) 
+                { return bucket.empty() || Comp{} (n, bucket.back()); });
+        }
+        // Find insertion point within targetBucket
+        typename std::vector<T>::iterator end = targetBucket->end();
+        if (std::next(targetBucket) == buckets.end()) {
+            /* If here, then we are in sentinel bucket. Exclude sentinel from search */
+            --end;
+        }
+        typename std::vector<T>::iterator targ = 
+            std::upper_bound(targetBucket->begin(), end, n,
+            [&](const T& n, const T& elem) { return Comp{} (n, elem); });
+
+        if (targ == targetBucket->end()) { 
+            // point to beginning of next bucket rather than end of this bucket.
+            ++targetBucket;
+            targ = targetBucket->begin();
+        }
+        return Iterator(targetBucket, targ);
+    }
+
+    /*
+        find() runs in O(log(sqrt(n))) and returns an iterator to the first 
+        instance of n.
+    */
+    Iterator find(const T& n) {
+        auto [targetBucket, targ] = lowerBound(n);
+        if ((targetBucket == std::prev(buckets.end()) && targ == endSentinel) || 
+            *targ != n) {
+            return this->end();
+        }
+        return Iterator(targetBucket, targ);
     }
 
     /*
@@ -116,140 +361,65 @@ public:
         (from 0) of the first occurence of n inside the sortedBucket.
         If n is not present then it returns -1.
     */
-    int distance(const T& n) const {
-        // Edge case: one empty bucket can exist if no elements in container
-        if (buckets.empty() || buckets.front().empty()) {
-            return 0;
-        }
-        int ct = 0;
-        typename std::vector<std::vector<T>>::const_iterator targetBucket = buckets.cbegin();      
-        while (targetBucket != buckets.cend() && Comp{} (targetBucket->back(), n)) {
-            ct += targetBucket->size();
-            ++targetBucket;
-        }
-        if (targetBucket == buckets.cend()) {
-            return -1;
-        }
-        typename std::vector<T>::const_iterator targ = 
-            std::lower_bound(targetBucket->begin(), targetBucket->end(), n,
-            [&](const T& elem, const T& n) { return Comp{} (elem, n); } );
-        ct += std::distance(targetBucket->begin(), targ);
-        return (targ == targetBucket->cend() || *targ != n) ? -1 : ct;
+    int distance(const T& n) {
+        return findWithDistance(n).second;
     }
 
-    /* 
-        lowerBound() runs in O(sqrt(n)) time and returns a pair of non-const
-        iterators, describing the bucket and the element (Where the element is
-        the first that satisfies: (element < n) or Comp{}(element, n) is false)
-        
-        If the element is past the entire range, the first iterator in the pair 
-        will be buckets.end() and the second iterator is invalid.
+    /*
+        findWithDistance() runs in O(sqrt(n)) time and returns a pair of: an 
+        Iterator to the element, along with the index of its first occurrence. 
+        If the element was not found, the pair consists of the end() Iterator 
+        and a distance of -1.
     */
-    std::pair<typename std::vector<std::vector<T>>::iterator, 
-              typename std::vector<T>::iterator> lowerBound(const T& n) {
-        /* Edge case: when container is empty, there is one bucket which is empty,
-            so instead of returning a valid targetBucket as first iterator, return 
-            buckets.end() */
-        if (buckets.empty() || buckets.front().empty()) {
-            return make_pair(buckets.end(), typename std::vector<T>::iterator());
-        }
-        // Search tail of buckets
-        typename std::vector<std::vector<T>>::iterator targetBucket = 
-            std::lower_bound(buckets.begin(), buckets.end(), n,
-            [&](const std::vector<T>& bucket, const T& n) 
-                { return bucket.empty() || Comp{} (bucket.back(), n); } );
-        if (targetBucket == buckets.end()) {
-            return make_pair(buckets.end(), typename std::vector<T>::iterator());
+    std::pair<Iterator, int> findWithDistance(const T& n) noexcept {
+        /*  Sentinel is last item of last bucket, so need to exclude from search */
+        int dist = 0;
+        typename std::vector<std::vector<T>>::iterator targetBucket = buckets.begin();
+        typename std::vector<std::vector<T>>::iterator sentinelBucket = 
+                std::prev(buckets.end());
+        if (buckets.size() > 1) {
+            while (targetBucket != sentinelBucket && 
+                   Comp{} (targetBucket->back(), n)) {
+                dist += targetBucket->size();
+                ++targetBucket;
+            }
+            if (Comp{} (targetBucket->back(), n)) {
+                targetBucket = sentinelBucket;
+            }
         }
         // Find insertion point within targetBucket
-        typename std::vector<T>::iterator targ = 
-            std::lower_bound(targetBucket->begin(), targetBucket->end(), n,
-            [&](const T& elem, const T& n) { return Comp{} (elem, n); } );
-
-        if (targ == targetBucket->end()) { 
-            // point to beginning of next bucket rather than end of this bucket.
-            ++targetBucket;
-            targ = (targetBucket == buckets.end())
-                ? typename std::vector<T>::iterator()
-                : targetBucket->begin();
+        typename std::vector<T>::iterator targ = targetBucket->begin();
+        while (targ != targetBucket->end() &&
+               (targetBucket != sentinelBucket || targ != endSentinel) && 
+               Comp{} (*targ, n)) {
+            ++dist;
+            ++targ;
         }
-        return make_pair(targetBucket, targ);
-    }
-    
-    /* 
-        upperBound() runs in O(sqrt(n)) time and returns a pair of non-const
-        iterators, describing the bucket and the element (Where the element is
-        the first that satisfies: (n < element) or Comp{}(n, element) is true)
-        
-        If the element is past the entire range, the first iterator in the pair 
-        will be buckets.end() and the second iterator is invalid.
-    */
-    std::pair<typename std::vector<std::vector<T>>::iterator, 
-              typename std::vector<T>::iterator> upperBound(const T& n) {
-        /* Edge case: when container is empty, there is one bucket which is empty,
-            so instead of returning a valid targetBucket as first iterator, return 
-            buckets.end() */
-        if (buckets.empty() || buckets.front().empty()) {
-            return make_pair(buckets.end(), typename std::vector<T>::iterator());
-        }
-        // Search tail of buckets
-        typename std::vector<std::vector<T>>::iterator targetBucket =
-            std::upper_bound(buckets.begin(), buckets.end(), n,
-            [&](const T& n, const std::vector<T>& bucket)
-                { return bucket.empty() || Comp{} (n, bucket.back()); } );
-
-        if (targetBucket == buckets.end()) {
-            return make_pair(buckets.end(), typename std::vector<T>::iterator());
-        }
-        // Find insertion point within targetBucket
-        typename std::vector<T>::iterator targ = 
-            std::upper_bound(targetBucket->begin(), targetBucket->end(), n,
-            [&](const T& n, const T& elem) { return Comp{} (n, elem); } );
-
         if (targ == targetBucket->end()) {
-            // point to beginning of next bucket rather than end of this bucket.
+            /*  Point to beginning of next bucket rather than end of this bucket.
+                If targ was already the sentinel, we cannot arrive here. */
             ++targetBucket;
-            targ = (targetBucket == buckets.end())
-                ? typename std::vector<T>::iterator()
-                : targetBucket->begin();
+            targ = targetBucket->begin();
         }
-        return make_pair(targetBucket, targ);
-    }
-
-    /*
-        find() returns a pair of iterators to the first instance of n,
-        describing the bucket and the element. If the element does not exist, 
-        the first iterator in the pair will be buckets.end() and the second 
-        iterator is invalid.
-    */
-    std::pair<typename std::vector<std::vector<T>>::iterator, 
-              typename std::vector<T>::iterator> find(const T& n) {
-        auto [targetBucket, targ] = lowerBound(n);
-        if (targetBucket == buckets.end() || *targ != n) {
-            return make_pair(buckets.end(), typename std::vector<T>::iterator());
-        }
-        return make_pair(targetBucket, targ);
+        return ((targetBucket == sentinelBucket && targ == endSentinel) || 
+                *targ != n)
+            ? std::make_pair(this->end(), -1)
+            : std::make_pair(Iterator(targetBucket, targ), dist);
     }
 
     /* 
-        insert() preserves stable sorting order (calls upperBound) and returns a 
-        pair of non-const iterators describing the bucket and the element. Note
-        that subsequent insertions may invalidate this iterator pair (just like
-        the underlying container, vector).
+        insert() runs in O(sqrt(n)). It preserves stable sorting order (by
+        calling upperBound()) and returns an iterator to the inserted element.
     */
-    std::pair<typename std::vector<std::vector<T>>::iterator,
-              typename std::vector<T>::iterator> insert(const T& n) {
+    Iterator insert(const T& n) {
         auto [targetBucket, targ] = upperBound(n);
-        if (targetBucket == buckets.end()) {
-            --targetBucket;
-            targ = targetBucket->end();
-        }
         /*  Only for insertion: the rebalance may invalidate all buckets::iterator
             and bucket::iterator if allocation occurs due to buckets vector 
             resizing. We store dists then regenerate iterators after balancing */
         size_t bucketDist = std::distance(buckets.begin(), targetBucket);
         size_t targDist = std::distance(targetBucket->begin(), targ);
         targetBucket->emplace(targ, n);
+        endSentinel = std::prev(buckets.back().end());
         
         size_t origSize = targetBucket->size();
         bool shiftRight = balance(targetBucket,
@@ -260,23 +430,19 @@ public:
         targDist -= (shiftRight && origSize > 2*bucketDensity) ? bucketDensity : 0;
         targ = std::next(targetBucket->begin(), targDist);
         ++sz;
-        return make_pair(targetBucket, targ);
+        return Iterator(targetBucket, targ);
     }
 
-    std::pair<typename std::vector<std::vector<T>>::iterator,
-              typename std::vector<T>::iterator> insert(T&& n) {
+    Iterator insert(T&& n) {
         auto [targetBucket, targ] = upperBound(n);
-        if (targetBucket == buckets.end()) {
-            --targetBucket;
-            targ = targetBucket->end();
-        }
         /*  Only for insertion: the rebalance may invalidate all buckets::iterator
             and bucket::iterator if allocation occurs due to buckets vector 
             resizing. We store dists then regenerate iterators after balancing */
         size_t bucketDist = std::distance(buckets.begin(), targetBucket);
         size_t targDist = std::distance(targetBucket->begin(), targ);
         targetBucket->emplace(targ, n);
-        
+        endSentinel = std::prev(buckets.back().end());
+
         size_t origSize = targetBucket->size();
         bool shiftRight = balance(targetBucket,
                                   std::next(targetBucket->begin(), targDist),
@@ -286,16 +452,16 @@ public:
         targDist -= (shiftRight && origSize > 2*bucketDensity) ? bucketDensity : 0;
         targ = std::next(targetBucket->begin(), targDist);
         ++sz;
-        return make_pair(targetBucket, targ);
+        return Iterator(targetBucket, targ);
     }
 
     /*
-        erase() runs in (O(sqrtn)) and deletes a single instance of the element. 
-        It returns how many instances of the element were deleted (1 or 0)
+        erase() runs in (O(sqrtn)) and erases a single instance of the element. 
+        It returns how many instances of the element were erased (1 or 0)
     */
-    int erase (const T& n) {
-        auto [targetBucket, targ] = lowerBound(n);
-        if (targetBucket == buckets.end() || targ == targetBucket->end()) {
+    int erase(const T& n) {
+        auto [targetBucket, targ] = find(n);
+        if (targetBucket == std::prev(buckets.end()) && targ == endSentinel) {
             return 0;
         }
         targetBucket->erase(targ);
@@ -305,18 +471,20 @@ public:
     }
 
     /*
-        eraseAll() runs in (O(sqrtn + #erased_elements)) and deletes all instances 
-        of the element. It returns how many instances of the element were deleted.
+        eraseAll() runs in (O(sqrtn + #erased_elements)) and erases all instances 
+        of the element. It returns how many instances of the element were erased.
     */
-    int eraseAll (const T& n) {
-        auto [targetBucket, targ] = lowerBound(n);
-        if (targetBucket == buckets.end()) {
+    int eraseAll(const T& n) {
+        auto [targetBucket, targ] = find(n);
+        if (targetBucket == std::prev(buckets.end()) && targ == endSentinel) {
             return 0;
         }
         // targ guaranteed to not point to end of targetBucket if valid targetBucket.
         int ct = 0;
         typename std::vector<std::vector<T>>::iterator thisBucket = targetBucket;
-        while (thisBucket != buckets.end() && *targ == n) {
+        typename std::vector<std::vector<T>>::iterator sentinelBucket = 
+            std::prev(buckets.end());
+        while ((thisBucket != sentinelBucket || targ != endSentinel) && *targ == n) {
             ++ct;
             targ = thisBucket->erase(targ);
             // now targ points right after erased element
@@ -330,21 +498,11 @@ public:
         return ct;
     }
 
-    /*
-        getBucketsEnd() returns a const iterator to the end of buckets. This is 
-        a bandaid fix until I implement an actual iterator interface. Used to 
-        check if the return iterator of find, insert, etc. is valid since 
-        buckets is a private member.
-    */
-    typename std::vector<std::vector<T>>::const_iterator getBucketsEnd() const {
-        return buckets.end();
-    }
-
 #ifdef DEBUG
     /*
-        Forcibly change the bucket density since in normal usage we cannot go
-        below the DefaultSmallDensity (500). This is used in debugging to force
-        balancing for small number of elements.
+        forceDensity() forcibly changes the bucket density since in normal usage,
+        we cannot go below the DefaultSmallDensity (500). This is used in demo 
+        to force balancing for small number of elements.
     */
     void forceDensity(size_t density) {
         bucketDensity = density;
@@ -377,9 +535,16 @@ public:
         std::cout << "===========================================" << std::endl;
         std::cout << "Total buckets " << buckets.size() << std::endl;
         int b = 0;
-        for (const std::vector<T>& bucket:buckets) {
+        for (auto bucket = buckets.begin(); bucket != buckets.end(); ++bucket) {
             std::cout << "bucket " << b++ << " contains: " << std::endl;
-            for (const T elem:bucket) std::cout << "  " << elem;
+            for (auto it = bucket->begin(); it != bucket->end(); ++it) {
+                if (bucket == std::prev(buckets.end()) && it == endSentinel) {
+                    std::cout << " sent ";
+                }
+                else {
+                    std::cout << "  " << *it;
+                }
+            }
             std::cout << std::endl;
         }
         std::cout << std::endl;
@@ -387,11 +552,17 @@ public:
 #endif
 
 private:
-    void init () {
+    inline void init() {
         if (buckets.empty()) {
             buckets.emplace_back(std::vector<T>());
             buckets.front().reserve(2*bucketDensity + 4);
+            buckets.front().emplace_back(T(
+            # ifdef DEBUG
+                SENTINEL_FLAG // if no flag, we use T() default constructor.
+            #endif
+            ));
         }
+        endSentinel = std::prev(buckets.back().end());
     }
 
     /* 
@@ -406,14 +577,15 @@ private:
     bool balance(typename std::vector<std::vector<T>>::iterator targetBucket,
                  typename std::vector<T>::iterator targ = typename std::vector<T>::iterator(),
                  bool targSupplied = false) {
-        if (targetBucket >= buckets.end()) {
+        if (targetBucket == buckets.end()) {
             return false;
         }
         bool shiftRight = false;
         typename std::vector<std::vector<T>>::iterator right = std::next(targetBucket);
         while (right != buckets.end() && right->empty()) {
-            right = buckets.erase(right); // now right points the next available bucket
+            right = buckets.erase(right); 
         }
+        // right points to next available bucket
         if (targetBucket->size() > bucketDensity * 2) {
             /* Create a bucket right of targetBucket and dump half of the
                 oversized targetBucket there */
@@ -454,14 +626,16 @@ private:
                 buckets.erase(targetBucket);
             }
         }
+        endSentinel = std::prev(buckets.back().end());
         return shiftRight;
     }
 
     // Private members
-    std::vector<std::vector<T, Alloc>> buckets;
-    size_t sz {0};
-    size_t capacity {0};
-    size_t bucketDensity {DefaultSmallDensity};
+    size_t                              sz              {0};
+    size_t                              capacity        {0};
+    size_t                              bucketDensity   {DefaultSmallDensity};
+    std::vector<std::vector<T, Alloc>>  buckets;
+    typename std::vector<T>::iterator   endSentinel;
 };
 
 #endif // UTIL_SORTED_BUCKET_VV_H

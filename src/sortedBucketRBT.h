@@ -3,8 +3,8 @@
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
  * @brief Implementation of Sorted Bucket container using weighted red-black tree
- * @version 1.0
- * @date 2023-08-27
+ * @version 1.1
+ * @date 2023-09-19
  * 
  * 
  * Container provides sub-linear time lookup, distance, insertion, deletion.
@@ -14,12 +14,12 @@
  * underlying tree structure. Also possibly frequent garbage collection
  * 
  * Time complexities:
- *      find:       O(log(n))
- *      distance:   O(log(n))
- *      insert:     O(log(n))
- *      erase:      O(log(n))
+ *      find:               O(log(n))
+ *      distance:           O(log(n))
+ *      insert:             O(log(n))
+ *      erase:              O(log(n))
  * 
- * @todo bidirectional iterator interface
+ * 
  */
 
 #ifndef UTIL_SORTED_BUCKET_RBT_H
@@ -29,6 +29,7 @@
 
 #define DEBUG
 #ifdef DEBUG
+#define SENTINEL_FLAG 99999 // value for sentinel, otherwise it uses default T().
 #include <iostream>
 #include <queue>
 #include <string>
@@ -40,32 +41,150 @@ template <typename T,
           typename Alloc    = std::allocator<T>>
 class SortedBucketRBT {
 public:
-    /* Note: creating new Nodes will share the allocator defined for the value 
-        of type T. I consider the Node as just containing a bit of bookkeeping 
-        information for the RB tree, so this seems reasonable. In certain cases
-        though, it may ruin alignment or the few bytes of extra data may mess with
-        a very fine-funed custom allocator, but for now I am using this.
-    */
     struct Node {
-        Node(const T& val, Node* par, unsigned char color, size_t copies = 1) 
+        Node(const T& val, Node* par, unsigned char color, size_t copies = 1) noexcept
             : val(val)
             , par(par)
-            , color(color)
-            , copies(copies) {}
+            , mass(copies)
+            , copies(copies) 
+            , color(color){}
             
-        Node(T&& val, Node* par, unsigned char color, size_t copies = 1) noexcept 
+        Node(T&& val, Node* par, unsigned char color, size_t copies = 1) noexcept
             : val(val)
             , par(par)
-            , color(color)
-            , copies(copies) {}
+            , mass(copies)
+            , copies(copies)
+            , color(color){}
         
-        Node* par {nullptr};
-        Node* left {nullptr};
-        Node* right {nullptr};
-        int mass {1};   // mass of itself and all lower nodes
-        int copies {1}; // allow multiset functionality while keeping BST rules
-        unsigned char color {Red};
-        T val;
+        Node*           par     {nullptr};
+        Node*           left    {nullptr};
+        Node*           right   {nullptr};
+        int             mass    {1}; // mass of itself and all lower nodes
+        int             copies  {1}; // allow multiset functionality while keeping BST rules
+        unsigned char   color   {Red};
+        T               val;
+    };
+    /*  steal Alloc's traits and rebind to allocate for node, which contains extra
+        bookkeeping info in addition to the value_type, like in std::list. In certain
+        cases, it may ruin alignment or the few bytes of extra data may mess with
+        a very fine-funed custom allocator, but STL seems to tolerate this so I will */
+    using AllocNode = typename std::allocator_traits<Alloc>::template rebind_alloc<Node>;
+    
+    friend struct Iterator;
+    struct Iterator {
+        friend class SortedBucketRBT;
+        using Iterator_category = std::bidirectional_iterator_tag;
+        using value_type        = T;
+        /*  difference_type is included here for compliance with Iterator_traits,
+            but distance should be calculated from SortedBucketRBT::distance()
+            for runtime in O(log(n)) rather than O(n)   */
+        using difference_type   = std::ptrdiff_t;
+        using pointer           = value_type*;
+        using const_pointer     = value_type const*;
+        using reference         = value_type&;
+        using const_reference   = value_type const&;
+
+        Iterator() noexcept {}
+
+        explicit Iterator(Node* node) noexcept : nodePtr(node) {}
+
+        Iterator(const Iterator& other) noexcept
+            : nodePtr(other.nodePtr) {}
+
+        inline reference operator *() noexcept {
+            return nodePtr->val;
+        }
+
+        inline const_reference operator *() const noexcept {
+            return nodePtr->val;
+        }
+
+        inline pointer operator ->() {
+            return &(nodePtr->val);
+        }
+
+        inline const_pointer operator ->() const {
+            return &(nodePtr->val);
+        }
+        
+        inline bool operator ==(const Iterator other) const noexcept {
+            return (nodePtr == other.nodePtr);
+        }
+
+        inline bool operator !=(const Iterator other) const noexcept {
+            return !(*this == other);
+        }
+
+        inline void operator =(const Iterator other) noexcept {
+            nodePtr = other.nodePtr;
+        }
+
+        inline int copies() const noexcept {
+            return nodePtr->copies;
+        }
+
+        /*  Pre-increment. Calling this on SortedBucketRBT::end() is UB, 
+            so requires checks like in STL containers */
+        Iterator& operator ++() {
+            Node* node = nodePtr;
+            if (node->right) {
+                node = node->right;
+                while (node->left) {
+                    node = node->left;
+                }
+                nodePtr = node;
+            }
+            else {
+                Node* temp = node->par;
+                while (temp && temp->right == node) {
+                    node = temp;
+                    temp = temp->par;
+                }
+                nodePtr = temp;
+            }
+            return *this;
+        }
+
+        /*  Post-increment. Calling this on SortedBucketRBT::end() is UB, 
+            so requires checks like in STL containers */
+        Iterator operator ++(int) {
+            Iterator temp = *this;
+            operator++();
+            return temp;
+        }
+
+        /*  Pre-decrement. Calling this on SortedBucketRBT::begin() is UB, 
+            so requires checks like in STL containers */
+        Iterator& operator --() {
+            Node* node = nodePtr;
+            if (node->left) {
+                node = node->left;
+                while (node->right) {
+                    node = node->right;
+                }
+                nodePtr = node;
+            }
+            else {
+                Node* temp = node->par;
+                while (temp && temp->left == node) {
+                    node = temp;
+                    temp = temp->par;
+                }
+                nodePtr = temp;
+            }
+            return *this;
+        }
+
+        /*  Post-decrement. Calling this on SortedBucketRBT::begin() is UB, 
+            so requires checks like in STL containers */
+        Iterator operator --(int) {
+            Iterator temp = *this;
+            operator--();
+            return temp;
+        }
+
+    private:
+        Node* nodePtr {nullptr};
     };
 
     enum Color {
@@ -74,157 +193,193 @@ public:
         DoubleBlack     = 2
     };
     
-    SortedBucketRBT() {}
+    /* Default constructor */
+    SortedBucketRBT() noexcept {init();}
 
+    /* Range constructor */
     template <class InputIterator>
-    SortedBucketRBT(InputIterator beginIt, InputIterator endIt) {
+    SortedBucketRBT(InputIterator beginIt, InputIterator endIt) noexcept {
+        init();
         for (InputIterator it = beginIt; it != endIt; ++it) {
             insert(*it);
         }
     }
     
-    ~SortedBucketRBT() {
+    /* Default destructor */
+    ~SortedBucketRBT() noexcept {
         destroy(root);
     }
 
-    size_t size() const {
+    /* Size getter */
+    inline size_t size() const noexcept {
         return sz;
     }
 
+    /* Begin getter */
+    inline Iterator begin() noexcept {
+        return Iterator(leftmost);
+    }
+
+    /* End getter */
+    inline Iterator end() noexcept {
+        return Iterator(endSentinel);
+    }
+
+    /*  Front element access. Calling front() on an empty RBTree will cause
+        segfault, just like with other STL containers */
+    inline T& front() noexcept {
+        return leftmost->val;
+    }
+
+    /*  Back element access. Calling back() on an empty RBTree will cause
+        segfault, just like with other STL containers */
+    inline T& back() noexcept {
+        return (--Iterator(endSentinel))->val;
+    }
+
     /*
-        find() runs in O(logn) time and returns a pair containing an iterator to 
-        the element, along with the index of its first occurrence, relative to 
-        the smallest element in the tree (0-indexed). If the element was not 
-        found, it returns a null iterator. 
+        find() runs in O(log(n)) and returns an Iterator to the first instance of n.
     */
-    std::pair<Node*, int> find(const T& n) {
+    Iterator find(const T& n) noexcept {
+        return findWithDistance(n).first;
+    }
+
+    /*
+        findWithDistance() runs in O(log(n)) time and returns a pair of: an Iterator 
+        to the element, along with the index of its first occurrence, relative to 
+        the smallest element in the tree (0-indexed). If the element was not 
+        found, the first of the pair is the end() Iterator. 
+    */
+    std::pair<Iterator, int> findWithDistance(const T& n) noexcept {
         Node* node = root;
         int dist = 0;
         while (node) {
-            if (Equal{} (n, node->val)) {
-                dist += (node->left) ? node->left->mass : 0;
-                return std::make_pair(node, dist);
-            }
-            if (Comp{} (n, node->val))
+            if (node == endSentinel) {
+                /* endSentinel guaranteed to not have right children */
                 node = node->left;
+            }
+            else if (Equal{} (n, node->val)) {
+                dist += (node->left) ? node->left->mass : 0;
+                return std::make_pair(Iterator(node), dist);
+            }
+            else if (Comp{} (n, node->val)) {
+                node = node->left;
+            }
             else {
                 dist += (node->left) ? node->left->mass : 0;
                 dist += node->copies;
                 node = node->right;
             }
         }
-        return std::make_pair(static_cast<Node*>(nullptr), -1);
+        return std::make_pair(Iterator(static_cast<Node*>(nullptr)), -1);
     }
 
     /*
         distance() runs in O(logn) time and returns the index of the first 
         occurrence of the element, 0-indexed. (Returns -1 if element not found)
     */
-    int distance (const T& n) {
-        return find(n).second;
+    int distance (const T& n) noexcept {
+        return findWithDistance(n).second;
     }
 
     /*
-        insert() runs in O(logn) time and returns a pair containing an iterator 
-        to the element, along with its index relative to the smallest element 
-        in the tree (0-indexed).
+        insert() runs in O(log(n)) time and returns an Iterator to the inserted
+        element.
     */
-    std::pair<Node*, int> insert(const T& n, size_t copies = 1) {
+    Iterator insert(const T& n, size_t copies = 1) noexcept {
         sz += copies;
-        int dist = 0;
-        if (!root) {
-            root = reinterpret_cast<Node*>(std::allocator_traits<Alloc>::allocate(
-                alloc, sizeof(Node)));
-            std::allocator_traits<Alloc>::construct(alloc, root, 
-                n, nullptr, Black, copies);
-            return std::make_pair(root, 0);
-        }
         Node* node = root;
         while (node) {
             node->mass += copies;
-            if (Equal{} (n, node->val)) {
-                node->copies += copies;
-                return std::make_pair(node, dist);
+            if (node == endSentinel) {
+                if (!endSentinel->left) {
+                    endSentinel->left = std::allocator_traits<AllocNode>::allocate(
+                        allocNode, 1);
+                    std::allocator_traits<AllocNode>::construct(allocNode, endSentinel->left,
+                        n, endSentinel, Red, copies);
+                    balanceDoubleRed(endSentinel->left);
+                    return insertHelper(n, endSentinel->left);
+                }
+                node = endSentinel->left;
             }
-            if (Comp{} (n, node->val)) {
+            else if (Equal{} (n, node->val)) {
+                node->copies += copies;
+                return insertHelper(n, node);
+            }
+            else if (Comp{} (n, node->val)) {
                 if (!node->left) {
-                    node->left = reinterpret_cast<Node*>(
-                        std::allocator_traits<Alloc>::allocate(
-                        alloc, sizeof(Node), /* hint location */ node));
-                    std::allocator_traits<Alloc>::construct(alloc, node->left, 
+                    node->left = std::allocator_traits<AllocNode>::allocate(
+                        allocNode, 1, /* hint location */ node);
+                    std::allocator_traits<AllocNode>::construct(allocNode, node->left, 
                         n, node, Red, copies);
                     balanceDoubleRed(node->left);
-                    return std::make_pair(node->left, dist);
+                    return insertHelper(n, node->left);
                 }
                 node = node->left;
             }
             else {
-                dist += (node->left) ? node->left->mass : 0;
-                dist += node->copies;
                 if (!node->right) {
-                    node->right = reinterpret_cast<Node*>(
-                        std::allocator_traits<Alloc>::allocate(
-                        alloc, sizeof(Node), /* hint location */ node));
-                    std::allocator_traits<Alloc>::construct(alloc, node->right, 
+                    node->right = std::allocator_traits<AllocNode>::allocate(
+                        allocNode, 1, /* hint location */ node);
+                    std::allocator_traits<AllocNode>::construct(allocNode, node->right, 
                         n, node, Red, copies);
                     balanceDoubleRed(node->right);
-                    return std::make_pair(node->right, dist);
+                    return insertHelper(n, node->right);
                 }
                 node = node->right;
             }
         }
-        return std::make_pair(static_cast<Node*>(nullptr), -1);
+        return insertHelper(n, static_cast<Node*>(nullptr));
     }
 
-    std::pair<Node*, int> insert(T&& n, size_t copies = 1) {
+    Iterator insert(T&& n, size_t copies = 1) noexcept {
         sz += copies;
-        int dist = 0;
-        if (!root) {
-            root = reinterpret_cast<Node*>(std::allocator_traits<Alloc>::allocate(
-                alloc, sizeof(Node)));
-            std::allocator_traits<Alloc>::construct(alloc, root, 
-                n, nullptr, Black, copies);
-            return std::make_pair(root, 0);
-        }
         Node* node = root;
         while (node) {
             node->mass += copies;
-            if (Equal{} (n, node->val)) {
-                node->copies += copies;
-                return std::make_pair(node, dist);
+            if (node == endSentinel) {
+                if (!endSentinel->left) {
+                    endSentinel->left = std::allocator_traits<AllocNode>::allocate(
+                        allocNode, 1);
+                    std::allocator_traits<AllocNode>::construct(allocNode, endSentinel->left,
+                        n, endSentinel, Red, copies);
+                    balanceDoubleRed(endSentinel->left);
+                    return insertHelper(n, endSentinel->left);
+                }
+                node = endSentinel->left;
             }
-            if (Comp{} (n, node->val)) {
+            else if (Equal{} (n, node->val)) {
+                node->copies += copies;
+                return insertHelper(n, node);
+            }
+            else if (Comp{} (n, node->val)) {
                 if (!node->left) {
-                    node->left = reinterpret_cast<Node*>(
-                        std::allocator_traits<Alloc>::allocate(
-                        alloc, sizeof(Node), /* hint location */ node));
-                    std::allocator_traits<Alloc>::construct(alloc, node->left, 
+                    node->left = std::allocator_traits<AllocNode>::allocate(
+                        allocNode, 1, /* hint location */ node);
+                    std::allocator_traits<AllocNode>::construct(allocNode, node->left, 
                         n, node, Red, copies);
                     balanceDoubleRed(node->left);
-                    return std::make_pair(node->left, dist);
+                    return insertHelper(n, node->left);
                 }
                 node = node->left;
             }
             else {
-                dist += (node->left) ? node->left->mass : 0;
-                dist += node->copies;
                 if (!node->right) {
-                    node->right = reinterpret_cast<Node*>(
-                        std::allocator_traits<Alloc>::allocate(
-                        alloc, sizeof(Node), /* hint location */ node));
-                    std::allocator_traits<Alloc>::construct(alloc, node->right, 
+                    node->right = std::allocator_traits<AllocNode>::allocate(
+                        allocNode, 1, /* hint location */ node);
+                    std::allocator_traits<AllocNode>::construct(allocNode, node->right, 
                         n, node, Red, copies);
                     balanceDoubleRed(node->right);
-                    return std::make_pair(node->right, dist);
+                    return insertHelper(n, node->right);
                 }
                 node = node->right;
             }
         }
-        return std::make_pair(static_cast<Node*>(nullptr), -1);
+        return insertHelper(n, static_cast<Node*>(nullptr));
     }
 
     template <class InputIterator>
-    void insert(InputIterator beginIt, InputIterator endIt, size_t copies) {
+    void insert(InputIterator beginIt, InputIterator endIt, size_t copies) noexcept {
         /*  If allowing "copies" arg to be default-parameterized, then our template 
             deduction can fail because calling insert(4, 3) will call treat type int
             as type InputIterator rather than T (on GCC 13.1) */
@@ -234,12 +389,13 @@ public:
     }
 
     /*
-        erase runs in O(logn) deletes a single instance of the element and 
-        returns how many instances of the element were deleted (1 if successful,
+        erase runs in O(logn) erases a single instance of the element and 
+        returns how many instances of the element were erased (1 if successful,
         0 if not found).
     */
-    int erase(const T& n) {
-        auto [node, pos] = find(n);
+    int erase(const T& n) noexcept {
+        auto [it, pos] = findWithDistance(n);
+        Node* node = it.nodePtr;
         if (!node) {
             return 0;
         }
@@ -254,23 +410,28 @@ public:
     }
 
     /*
-        eraseAll runs in O(logn) and deletes all instances of the element. 
-        It returns how many instances of the element were deleted.
+        eraseAll runs in O(logn) and erases all instances of the element. 
+        It returns how many instances of the element were erased.
     */
-    int eraseAll(const T& n) {
-        auto [node, pos] = find(n);
+    int eraseAll(const T& n) noexcept {
+        auto [it, pos] = findWithDistance(n);
+        Node* node = it.nodePtr;
         if (!node) {
             return 0;
         }
         return eraseAll(node);
     }
 
-    int eraseAll(Node* node) {
+    int eraseAll(Node* node) noexcept {
         if (!node) {
             return 0;
         }
         Node* par = node->par;
         int ct = node->copies;
+
+        if (leftmost != endSentinel && node->val == leftmost->val) {
+            leftmost = (++Iterator(leftmost)).nodePtr;
+        }
 
         //  node is a leaf. 
         if (!node->left && !node->right) {
@@ -357,7 +518,7 @@ public:
                 }
             }
             sz -= ct;
-            delete node;
+            std::allocator_traits<AllocNode>::destroy(allocNode, node);
         }
 
         // node has only a left child
@@ -379,7 +540,7 @@ public:
             updateMass(par, 0 - ct);
             balanceDoubleBlack(node->left);
             sz -= ct;
-            delete node;
+            std::allocator_traits<AllocNode>::destroy(allocNode, node);
         }
 
         // node has only a right child
@@ -401,7 +562,7 @@ public:
             updateMass(par, 0 - ct);
             balanceDoubleBlack(node->right);
             sz -= ct;
-            delete node;
+            std::allocator_traits<AllocNode>::destroy(allocNode, node);
         }
 
         // node has two children
@@ -409,9 +570,9 @@ public:
             /*  Normal BST deletion, find next in-order successor.
                 Succ now takes the place of node.
                 We must physically rearrange (not simply swap contents of) successor
-                node, so that iterators and pointers become invalid after we erase
+                node, so that Iterators and pointers become invalid after we erase
                 that node, rather than cause confusion when contents of an
-                apparently valid iterator suddenly change.
+                apparently valid Iterator suddenly change.
             */
             Node* succ = node->right;
             while (succ->left) {
@@ -430,19 +591,17 @@ public:
         return ct;
     }
 
-
 #ifdef DEBUG
     void print(const std::string& name = "SortedBucketRBT") const {
         std::cout << "Printing " << name << " with size = " << sz << std::endl;
         std::cout << "===========================================" << std::endl;
-        
         typedef std::pair<const Node*, bool> p;
         std::queue<p> q;
         if (!root) {
             std::cout << "red black tree is empty" << std::endl;
             return;
         }
-        else {
+        if (root) { //else {
             std::cout << "root is " << root->val << ", mass = " << root->mass << 
             ", copies = " << root->copies << ", color is " <<
             (root->color == Black ? "Black" : "Red") << std::endl;
@@ -487,13 +646,44 @@ public:
 #endif
 
 private:
-    /* swap() takes two nodes and swaps their positions in the tree, rather than
-        contents. This means that any iterators will stay valid in pointing to
+    inline void init() {
+        endSentinel = std::allocator_traits<AllocNode>::allocate(
+            allocNode, 1);
+        std::allocator_traits<AllocNode>::construct(allocNode, endSentinel,
+            T(
+            #ifdef DEBUG 
+                SENTINEL_FLAG // if no flag, we use T() default constructor.
+            #endif
+            ), nullptr, Black, 0);
+        /*  Must explicitly set internal data when using traits::allocate and construct
+            combo, since class initializers not called this way. */
+        endSentinel->left = nullptr;
+        endSentinel->right = nullptr;
+        endSentinel->mass = 0;
+        root = endSentinel;
+        leftmost = endSentinel;
+    }
+
+    /*  insertHelper catches all return paths from insert(), and injects a check 
+        where leftmost is replaced if we inserted a new smallest element. */
+    inline Iterator insertHelper(const T& n, Node* node) noexcept {
+        if (!node) {
+            return Iterator(node);
+        }
+        if (leftmost == endSentinel || n < leftmost->val) {
+            leftmost = node;
+        }
+        return Iterator(node);
+    };
+
+    /*  
+        swap() takes two nodes and swaps their positions in the tree, rather than
+        contents. This means that any Iterators will stay valid in pointing to
         the correct contents of the nodes. Ensuring that the new node positions
         meet BST ordering is the caller's responsibility. This function is used
         only when deleting a node and replacing it with its next in-order successor.
     */
-    void swap(Node* a, Node* b, bool isImmediateRight) {
+    void swap(Node* a, Node* b, bool isImmediateRight) noexcept {
         if (!a || !b) {
             return;
         }
@@ -557,7 +747,7 @@ private:
         mass. It preserves colors, so maintaining valid BST structure is the 
         responsibility of the caller.
     */
-    void leftRotate(Node* upperPivot) {
+    void leftRotate(Node* upperPivot) noexcept {
         if (!upperPivot) {
             return;
         }
@@ -595,7 +785,7 @@ private:
         mass. It preserves colors, so maintaining valid BST structure is the
         responsibility of the caller.
     */
-    void rightRotate(Node* upperPivot) {
+    void rightRotate(Node* upperPivot) noexcept {
         if (!upperPivot) {
             return;
         }
@@ -633,7 +823,7 @@ private:
         updateMass runs in O(logn) time and propogates a mass change of (ct) up
         the tree to the root, starting from node.
     */
-    void updateMass(Node* node, int ct) {
+    inline void updateMass(Node* node, int ct) noexcept {
         while (node) {
             node->mass += ct;
             node = node->par;
@@ -661,23 +851,92 @@ private:
                 return;
             }
             bool parOnLeft = (grandpar->left == par);
-            Node* uncle = (parOnLeft) ? grandpar->right : grandpar->left;
-            if (!uncle || uncle->color == Black) { // null uncle counts as black
-                grandpar->color = Red;
-                par->color = Black;
-                if (parOnLeft) {
-                    rightRotate(grandpar);
+
+            /* red problem child is along axis of rotation (lhs) */
+            if (parOnLeft && child == par->left) {
+                child->color = Black;
+                rightRotate(grandpar);
+                /* continue loop for par again. */
+                child = par;
+            }
+            /* red problem child is along axis of rotation (rhs) */
+            else if (!parOnLeft && child == par->right) {
+                child->color = Black;
+                leftRotate(grandpar);
+                /* continue loop for par again. */
+                child = par;
+            }
+            /* red problem child is out-of-line (lhs) */
+            else if (parOnLeft && child == par->right) {
+                if (grandpar == root) {
+                    root = child;
                 }
                 else {
-                    leftRotate(grandpar);
+                    if (grandpar->par->left == grandpar) {
+                        grandpar->par->left = child;
+                    }
+                    else {
+                        grandpar->par->right = child;
+                    }
                 }
-                return;
-            }
-            else {
+                grandpar->left = child->right;
+                if (child->right) {
+                    child->right->par = grandpar;
+                }
+                par->right = child->left;
+                if (child->left) {
+                    child->left->par = par;
+                }
+                child->par = grandpar->par;
+                child->left = par;
+                child->right = grandpar;
+                grandpar->par = child;
+                par->par = child;
                 par->color = Black;
-                uncle->color = Black;
-                grandpar->color = Red;
-                child = grandpar; // continue loop for grandpar
+                grandpar->mass = grandpar->copies;
+                grandpar->mass += (grandpar->left) ? grandpar->left->mass : 0;
+                grandpar->mass += (grandpar->right) ? grandpar->right->mass : 0;
+                par->mass = par->copies;
+                par->mass += (par->left) ? par->left->mass : 0;
+                par->mass += (par->right) ? par->right->mass : 0;
+                child->mass = child->copies + grandpar->mass + par->mass;
+                /* continue loop for child again. */
+            }
+            /* red problem child is out-of-line (rhs) */
+            else {
+                if (grandpar == root) {
+                    root = child;
+                }
+                else {
+                    if (grandpar->par->left == grandpar) {
+                        grandpar->par->left = child;
+                    }
+                    else {
+                        grandpar->par->right = child;
+                    }
+                }
+                grandpar->right = child->left;
+                if (child->left) {
+                    child->left->par = grandpar;
+                }
+                par->left = child->right;
+                if (child->right) {
+                    child->right->par = par;
+                }
+                child->par = grandpar->par;
+                child->left = grandpar;
+                child->right = par;
+                grandpar->par = child;
+                par->par = child;
+                par->color = Black;
+                grandpar->mass = grandpar->copies;
+                grandpar->mass += (grandpar->left) ? grandpar->left->mass : 0;
+                grandpar->mass += (grandpar->right) ? grandpar->right->mass : 0;
+                par->mass = par->copies;
+                par->mass += (par->left) ? par->left->mass : 0;
+                par->mass += (par->right) ? par->right->mass : 0;
+                child->mass = child->copies + grandpar->mass + par->mass;
+                /* continue loop for child again. */
             }
         }
         root->color = Black;
@@ -688,7 +947,7 @@ private:
         It checks the "problem child" node for being DoubleBlack and fixes tree
         if needed.
     */
-    void balanceDoubleBlack(Node* child) {
+    void balanceDoubleBlack(Node* child) noexcept {
         while (child) {
             if (child->color != DoubleBlack) {
                 return;
@@ -762,21 +1021,22 @@ private:
     }
 
     /* 
-        Destructor helper function.
+        Destructor recursive helper.
     */
-    void destroy(Node* node) {
+    void destroy(Node* node) noexcept {
         if (node) {
-            Node* left = node->left, *right = node->right;
-            delete node;
-            destroy(left);
-            destroy(right);
+            std::allocator_traits<AllocNode>::destroy(allocNode, node->left);
+            std::allocator_traits<AllocNode>::destroy(allocNode, node->right);
+            std::allocator_traits<AllocNode>::destroy(allocNode, node);
         }
     }
 
     // Private members
-    Alloc alloc; // since we handle creation of value container (aka nodes)
-    Node* root {nullptr};
-    size_t sz {0};
+    AllocNode   allocNode;      // instance of Node template allocator
+    size_t      sz              {0};
+    Node*       root            {nullptr};
+    Node*       leftmost        {nullptr};
+    Node*       endSentinel     {nullptr};
 };
 
 #endif // UTIL_SORTED_BUCKET_RBT_H

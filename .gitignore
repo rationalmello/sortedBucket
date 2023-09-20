@@ -1,9 +1,11 @@
 # snips
 *.png
-*.txt
 
 # debug files
 debug/
+
+#demo files
+demo/
 
 # build files
 build/

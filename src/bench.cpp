@@ -3,8 +3,8 @@
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
  * @brief Benchmarking weighted red-black tree Sorted Bucket
- * @version 1.0
- * @date 2023-08-29
+ * @version 1.1
+ * @date 2023-09-19
  * 
  * 
  * Benchmarking performance using Google Benchmark
@@ -207,7 +207,6 @@ static void BM_VV_erase(benchmark::State& state) {
 }
 
 
-
 /* Register wrappers for benchmark */
 BENCHMARK_TEMPLATE(BM_RBT_find, uint64_t)
 	->RangeMultiplier(benchMultiplier)
@@ -248,7 +247,6 @@ BENCHMARK_TEMPLATE(BM_VV_insert, uint64_t)
 	->Range(benchIterLow, benchIterHigh)
 	->Unit(benchmark::kMillisecond);
 
-
 BENCHMARK_TEMPLATE(BM_RBT_erase, uint64_t)
 	->RangeMultiplier(benchMultiplier)
 	->Range(benchIterLow, benchIterHigh)
@@ -261,16 +259,6 @@ BENCHMARK_TEMPLATE(BM_VV_erase, uint64_t)
 	->RangeMultiplier(benchMultiplier)
 	->Range(benchIterLow, benchIterHigh)
 	->Unit(benchmark::kMillisecond);
-
-
-
-
-
-
-
-
-
-
 
 
 BENCHMARK_MAIN();
