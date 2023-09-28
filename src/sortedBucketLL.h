@@ -389,7 +389,7 @@ public:
 
     Iterator insert(T&& n) {
         auto [targetBucket, targ] = upperBound(n);
-        targetBucket->emplace(targ, n);
+        targetBucket->emplace(targ, std::move(n));
         --targ; // so we point to newly inserted element. Only for LL, not VV
         typename std::list<std::list<T>>::iterator outBucket = 
             balance(targetBucket, targ, true) ? std::next(targetBucket) : targetBucket;

@@ -50,7 +50,7 @@ public:
             , color(color){}
             
         Node(T&& val, Node* par, unsigned char color, size_t copies = 1) noexcept
-            : val(val)
+            : val(std::move(val))
             , par(par)
             , mass(copies)
             , copies(copies)
@@ -342,7 +342,7 @@ public:
                     endSentinel->left = std::allocator_traits<AllocNode>::allocate(
                         allocNode, 1);
                     std::allocator_traits<AllocNode>::construct(allocNode, endSentinel->left,
-                        n, endSentinel, Red, copies);
+                        std::move(n), endSentinel, Red, copies);
                     balanceDoubleRed(endSentinel->left);
                     return insertHelper(n, endSentinel->left);
                 }
@@ -357,7 +357,7 @@ public:
                     node->left = std::allocator_traits<AllocNode>::allocate(
                         allocNode, 1, /* hint location */ node);
                     std::allocator_traits<AllocNode>::construct(allocNode, node->left, 
-                        n, node, Red, copies);
+                        std::move(n), node, Red, copies);
                     balanceDoubleRed(node->left);
                     return insertHelper(n, node->left);
                 }
@@ -368,7 +368,7 @@ public:
                     node->right = std::allocator_traits<AllocNode>::allocate(
                         allocNode, 1, /* hint location */ node);
                     std::allocator_traits<AllocNode>::construct(allocNode, node->right, 
-                        n, node, Red, copies);
+                        std::move(n), node, Red, copies);
                     balanceDoubleRed(node->right);
                     return insertHelper(n, node->right);
                 }

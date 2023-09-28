@@ -440,7 +440,7 @@ public:
             resizing. We store dists then regenerate iterators after balancing */
         size_t bucketDist = std::distance(buckets.begin(), targetBucket);
         size_t targDist = std::distance(targetBucket->begin(), targ);
-        targetBucket->emplace(targ, n);
+        targetBucket->emplace(targ, std::move(n));
         endSentinel = std::prev(buckets.back().end());
 
         size_t origSize = targetBucket->size();
