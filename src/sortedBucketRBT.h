@@ -286,7 +286,7 @@ public:
         insert() runs in O(log(n)) time and returns an Iterator to the inserted
         element.
     */
-    Iterator insert(const T& n, size_t copies = 1) noexcept {
+    Iterator insert(const T& n, size_t copies = 1) {
         sz += copies;
         Node* node = root;
         while (node) {
@@ -332,7 +332,7 @@ public:
         return insertHelper(n, static_cast<Node*>(nullptr));
     }
 
-    Iterator insert(T&& n, size_t copies = 1) noexcept {
+    Iterator insert(T&& n, size_t copies = 1) {
         sz += copies;
         Node* node = root;
         while (node) {
@@ -379,7 +379,7 @@ public:
     }
 
     template <class InputIterator>
-    void insert(InputIterator beginIt, InputIterator endIt, size_t copies) noexcept {
+    void insert(InputIterator beginIt, InputIterator endIt, size_t copies) {
         /*  If allowing "copies" arg to be default-parameterized, then our template 
             deduction can fail because calling insert(4, 3) will call treat type int
             as type InputIterator rather than T (on GCC 13.1) */
