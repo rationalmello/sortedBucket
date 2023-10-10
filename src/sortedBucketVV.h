@@ -34,12 +34,13 @@
 #include <functional>
 #include <math.h>
 
-#define DEBUG
-#ifdef DEBUG
-#define SENTINEL_FLAG 99999 // value for sentinel, otherwise it uses default T().
+//#define NDEBUG
+#ifndef NDEBUG
+/* magic value for sentinel, otherwise uses default T() */
+#define SENTINEL_FLAG 99999
 #include <iostream>
 #include <string>
-#endif
+#endif // ifndef NDEBUG
 
 template <typename T,
           typename Comp     = std::less<T>,
@@ -498,7 +499,7 @@ public:
         return ct;
     }
 
-#ifdef DEBUG
+#ifndef NDEBUG
     /*
         forceDensity() forcibly changes the bucket density since in normal usage,
         we cannot go below the DefaultSmallDensity (500). This is used in demo 
@@ -557,7 +558,7 @@ private:
             buckets.emplace_back(std::vector<T>());
             buckets.front().reserve(2*bucketDensity + 4);
             buckets.front().emplace_back(T(
-            # ifdef DEBUG
+            # ifndef NDEBUG
                 SENTINEL_FLAG // if no flag, we use T() default constructor.
             #endif
             ));

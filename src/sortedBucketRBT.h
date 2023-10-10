@@ -27,13 +27,14 @@
 
 #include <functional>
 
-#define DEBUG
-#ifdef DEBUG
-#define SENTINEL_FLAG 99999 // value for sentinel, otherwise it uses default T().
+//#define NDEBUG
+#ifndef NDEBUG
+/* magic value for sentinel, otherwise uses default T() */
+#define SENTINEL_FLAG 99999
 #include <iostream>
 #include <queue>
 #include <string>
-#endif
+#endif // ifndef NDEBUG
 
 template <typename T,
           typename Comp     = std::less<T>,
@@ -591,7 +592,7 @@ public:
         return ct;
     }
 
-#ifdef DEBUG
+#ifndef NDEBUG
     void print(const std::string& name = "SortedBucketRBT") const {
         std::cout << "Printing " << name << " with size = " << sz << std::endl;
         std::cout << "===========================================" << std::endl;
@@ -651,7 +652,7 @@ private:
             allocNode, 1);
         std::allocator_traits<AllocNode>::construct(allocNode, endSentinel,
             T(
-            #ifdef DEBUG 
+            #ifndef NDEBUG 
                 SENTINEL_FLAG // if no flag, we use T() default constructor.
             #endif
             ), nullptr, Black, 0);
