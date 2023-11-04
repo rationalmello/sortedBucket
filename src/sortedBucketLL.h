@@ -3,8 +3,8 @@
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
  * @brief Implementation of Sorted Bucket container using std::list of lists
- * @version 1.1
- * @date 2023-09-19
+ * @version 1.2
+ * @date 2023-11-03
  * 
  * 
  * Container provides sub-linear time lookup, distance, insertion, deletion.
@@ -30,14 +30,15 @@
 */
 #define DefaultSmallDensity (size_t(500))
 
+#include <cassert>
 #include <functional>
 #include <list>
 #include <math.h>
 
 //#define NDEBUG
 #ifndef NDEBUG
-/* magic value for sentinel, otherwise uses default T() */
-#define SENTINEL_FLAG 99999
+/* magic value for sentinel, otherwise uses T{} */
+#define SENTINEL_FLAG 0xBEEF
 #include <iostream>
 #include <string>
 #endif // ifndef NDEBUG
@@ -243,6 +244,7 @@ public:
                 /*  Guaranteed no empty buckets if sz > 0, so track the first elem
                     of each bucket. For list implementation, iterators remain 
                     valid after balancing */
+                assert(!b->empty());
                 balance(b);
                 ++b;
             }
@@ -390,7 +392,7 @@ public:
 
     Iterator insert(T&& n) {
         auto [targetBucket, targ] = upperBound(n);
-        targetBucket->emplace(targ, std::move(n));
+        targetBucket->emplace(targ, std::forward<T>(n));
         --targ; // so we point to newly inserted element. Only for LL, not VV
         typename std::list<std::list<T>>::iterator outBucket = 
             balance(targetBucket, targ, true) ? std::next(targetBucket) : targetBucket;
@@ -423,6 +425,7 @@ public:
             return 0;
         }
         // targ guaranteed to not point to end of targetBucket if valid targetBucket.
+        assert(targ != targetBucket->end());
         int ct = 0;
         typename std::list<std::list<T>>::iterator thisBucket = targetBucket;
         typename std::list<std::list<T>>::iterator sentinelBucket = 
@@ -455,6 +458,7 @@ public:
                 /*  Guaranteed no empty buckets if sz > 0, so track the first elem
                     of each bucket. For list implementation, iterators remain 
                     valid after balancing */
+                assert(!b->empty());
                 balance(b);
                 ++b;
             }
@@ -491,11 +495,11 @@ private:
     inline void init() {
         if (buckets.empty()) {
             buckets.emplace_back(std::list<T>());
-            buckets.front().emplace_back(T(
+            buckets.front().emplace_back(T{
             # ifndef NDEBUG
-                SENTINEL_FLAG // if no flag, we use T() default constructor.
+                SENTINEL_FLAG // if no flag, we use T{} constructor.
             #endif
-            ));
+            });
         }
         endSentinel = std::prev(buckets.back().end());
     }

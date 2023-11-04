@@ -2,7 +2,7 @@
  * @file bench.cpp
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
- * @brief Benchmarking weighted red-black tree Sorted Bucket
+ * @brief Benchmarking various sortedBucket implementations
  * @version 1.1
  * @date 2023-09-19
  * 

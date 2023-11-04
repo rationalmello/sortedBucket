@@ -3,8 +3,8 @@
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
  * @brief Implementation of Sorted Bucket container using weighted red-black tree
- * @version 1.1
- * @date 2023-09-19
+ * @version 1.2
+ * @date 2023-11-03
  * 
  * 
  * Container provides sub-linear time lookup, distance, insertion, deletion.
@@ -25,12 +25,13 @@
 #ifndef UTIL_SORTED_BUCKET_RBT_H
 #define UTIL_SORTED_BUCKET_RBT_H
 
+#include <cassert>
 #include <functional>
 
 //#define NDEBUG
 #ifndef NDEBUG
-/* magic value for sentinel, otherwise uses default T() */
-#define SENTINEL_FLAG 99999
+/* magic value for sentinel, otherwise uses T{} */
+#define SENTINEL_FLAG 0xBEEF
 #include <iostream>
 #include <queue>
 #include <string>
@@ -38,7 +39,6 @@
 
 template <typename T,
           typename Comp     = std::less<T>,
-          typename Equal    = std::equal_to<T>,
           typename Alloc    = std::allocator<T>>
 class SortedBucketRBT {
 public:
@@ -256,10 +256,10 @@ public:
         int dist = 0;
         while (node) {
             if (node == endSentinel) {
-                /* endSentinel guaranteed to not have right children */
+                assert(endSentinel->right == nullptr);
                 node = node->left;
             }
-            else if (Equal{} (n, node->val)) {
+            else if (!Comp{} (n, node->val) && !Comp{} (node->val, n)) { /* Equality */
                 dist += (node->left) ? node->left->mass : 0;
                 return std::make_pair(Iterator(node), dist);
             }
@@ -303,7 +303,7 @@ public:
                 }
                 node = endSentinel->left;
             }
-            else if (Equal{} (n, node->val)) {
+            else if (!Comp{} (n, node->val) && !Comp{} (node->val, n)) { /* Equality */
                 node->copies += copies;
                 return insertHelper(n, node);
             }
@@ -343,13 +343,13 @@ public:
                     endSentinel->left = std::allocator_traits<AllocNode>::allocate(
                         allocNode, 1);
                     std::allocator_traits<AllocNode>::construct(allocNode, endSentinel->left,
-                        std::move(n), endSentinel, Red, copies);
+                        std::forward<T>(n), endSentinel, Red, copies);
                     balanceDoubleRed(endSentinel->left);
                     return insertHelper(n, endSentinel->left);
                 }
                 node = endSentinel->left;
             }
-            else if (Equal{} (n, node->val)) {
+            else if (!Comp{} (n, node->val) && !Comp{} (node->val, n)) { /* Equality */
                 node->copies += copies;
                 return insertHelper(n, node);
             }
@@ -358,7 +358,7 @@ public:
                     node->left = std::allocator_traits<AllocNode>::allocate(
                         allocNode, 1, /* hint location */ node);
                     std::allocator_traits<AllocNode>::construct(allocNode, node->left, 
-                        std::move(n), node, Red, copies);
+                        std::forward<T>(n), node, Red, copies);
                     balanceDoubleRed(node->left);
                     return insertHelper(n, node->left);
                 }
@@ -369,7 +369,7 @@ public:
                     node->right = std::allocator_traits<AllocNode>::allocate(
                         allocNode, 1, /* hint location */ node);
                     std::allocator_traits<AllocNode>::construct(allocNode, node->right, 
-                        std::move(n), node, Red, copies);
+                        std::forward<T>(n), node, Red, copies);
                     balanceDoubleRed(node->right);
                     return insertHelper(n, node->right);
                 }
@@ -651,11 +651,11 @@ private:
         endSentinel = std::allocator_traits<AllocNode>::allocate(
             allocNode, 1);
         std::allocator_traits<AllocNode>::construct(allocNode, endSentinel,
-            T(
+            T{
             #ifndef NDEBUG 
-                SENTINEL_FLAG // if no flag, we use T() default constructor.
+                SENTINEL_FLAG // if no flag, we use T{} constructor.
             #endif
-            ), nullptr, Black, 0);
+            }, nullptr, Black, 0);
         /*  Must explicitly set internal data when using traits::allocate and construct
             combo, since class initializers not called this way. */
         endSentinel->left = nullptr;
@@ -671,7 +671,7 @@ private:
         if (!node) {
             return Iterator(node);
         }
-        if (leftmost == endSentinel || n < leftmost->val) {
+        if (leftmost == endSentinel || Comp{} (n, leftmost->val)) {
             leftmost = node;
         }
         return Iterator(node);
@@ -812,8 +812,7 @@ private:
         }
         upperPivot->left = cr;
 
-        child->mass = upperPivot->copies;
-        upperPivot->mass = 1;
+        upperPivot->mass = upperPivot->copies;
         upperPivot->mass += (cr) ? cr->mass : 0;
         upperPivot->mass += (upperPivot->right) ? upperPivot->right->mass : 0;
         child->mass = child->copies + upperPivot->mass;

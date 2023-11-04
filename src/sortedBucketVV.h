@@ -3,8 +3,8 @@
  * 
  * @author Gavin Dan (xfdan10@gmail.com)
  * @brief Implementation of Sorted Bucket container using std::vector of vectors
- * @version 1.1
- * @date 2023-09-19
+ * @version 1.2
+ * @date 2023-11-03
  * 
  * 
  * Container provides sub-linear time lookup, distance, insertion, deletion.
@@ -31,13 +31,14 @@
 */
 #define DefaultSmallDensity (size_t(500))
 
+#include <cassert>
 #include <functional>
 #include <math.h>
 
 //#define NDEBUG
 #ifndef NDEBUG
-/* magic value for sentinel, otherwise uses default T() */
-#define SENTINEL_FLAG 99999
+/* magic value for sentinel, otherwise uses T{} */
+#define SENTINEL_FLAG 0xBEEF
 #include <iostream>
 #include <string>
 #endif // ifndef NDEBUG
@@ -56,7 +57,7 @@ public:
         /*  difference_type is included here for compliance with iterator_traits,
             but distance should be calculated from SortedBucketVV::distance()
             for runtime in O(log(n)) rather than O(n)   */
-        using difference_type   = std::ptrdiff_t; 
+        using difference_type   = std::ptrdiff_t;
         using pointer           = value_type*;
         using const_pointer     = value_type const*;
         using reference         = value_type&;
@@ -271,6 +272,7 @@ public:
                     point to the next bucket if the old one was undersized and 
                     got merged (since vector iterators are equivalent to indexes).
                     If so, we would stay in the same iterator */
+                assert(!b->empty());
                 if (!balance(b)) {
                     ++b;
                 }
@@ -441,7 +443,7 @@ public:
             resizing. We store dists then regenerate iterators after balancing */
         size_t bucketDist = std::distance(buckets.begin(), targetBucket);
         size_t targDist = std::distance(targetBucket->begin(), targ);
-        targetBucket->emplace(targ, std::move(n));
+        targetBucket->emplace(targ, std::forward<T>(n));
         endSentinel = std::prev(buckets.back().end());
 
         size_t origSize = targetBucket->size();
@@ -481,6 +483,7 @@ public:
             return 0;
         }
         // targ guaranteed to not point to end of targetBucket if valid targetBucket.
+        assert(targ != targetBucket->end());
         int ct = 0;
         typename std::vector<std::vector<T>>::iterator thisBucket = targetBucket;
         typename std::vector<std::vector<T>>::iterator sentinelBucket = 
@@ -519,6 +522,7 @@ public:
                     If so, we would stay in the same iterator */
                 typename std::vector<std::vector<T>>::iterator b = 
                     std::next(buckets.begin(), bucketDist);
+                assert(!b->empty());
                 if (!balance(b)) {
                     ++bucketDist;
                 }
@@ -557,11 +561,11 @@ private:
         if (buckets.empty()) {
             buckets.emplace_back(std::vector<T>());
             buckets.front().reserve(2*bucketDensity + 4);
-            buckets.front().emplace_back(T(
+            buckets.front().emplace_back(T{
             # ifndef NDEBUG
-                SENTINEL_FLAG // if no flag, we use T() default constructor.
+                SENTINEL_FLAG // if no flag, we use T{} constructor.
             #endif
-            ));
+            });
         }
         endSentinel = std::prev(buckets.back().end());
     }

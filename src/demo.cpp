@@ -10,10 +10,10 @@
  * Demonstrating the usage of the different implementations of Sorted Containers.
  * Prints out contents after operations.
  * 
- * Ensure DEBUG is defined in all implementation headers to compile print functs.
  * 
  */
 
+#include <iostream>
 #include "sortedBucketRBT.h"
 #include "sortedBucketLL.h"
 #include "sortedBucketVV.h"
@@ -22,8 +22,8 @@
 #define DEMO_LL     // Prints out LL implementation demo
 #define DEMO_VV     // Prints out VV implementation demo
 
-#ifdef DEBUG
 using namespace std; // only for the demo, sue me :)
+
 
 int main() {
     vector<int> v1 {1, 2, 3};
@@ -143,7 +143,7 @@ int main() {
 
     int vvDist1 = vv.distance(19);
     int vvDist2 = vv.distance(20);
-    if (vvDist1 != -1) 
+    if (vvDist1 != -1)
         cout << "the sorted index of 19 is " << vvDist1 << endl;
     else 
         cout << "19 is not present" << endl;
@@ -174,4 +174,3 @@ int main() {
 
     return 0;
 }
-#endif // DEBUG
