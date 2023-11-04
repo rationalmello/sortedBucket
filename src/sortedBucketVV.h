@@ -295,6 +295,7 @@ public:
                 [&](const std::vector<T>& bucket, const T& n) 
                 { return bucket.empty() || Comp{} (bucket.back(), n); });
         }
+        assert(targetBucket != buckets.end());
         // Find insertion point within targetBucket
         typename std::vector<T>::iterator end = targetBucket->end();
         if (std::next(targetBucket) == buckets.end()) {
@@ -324,10 +325,11 @@ public:
         typename std::vector<std::vector<T>>::iterator sentinelBucket = 
             std::prev(buckets.end());
         if (buckets.size() > 1) {
-            targetBucket = std::upper_bound(buckets.begin(), buckets.end(), n,
+            targetBucket = std::upper_bound(buckets.begin(), sentinelBucket, n,
                 [&](const T& n, const std::vector<T>& bucket) 
                 { return bucket.empty() || Comp{} (n, bucket.back()); });
         }
+        assert(targetBucket != buckets.end());
         // Find insertion point within targetBucket
         typename std::vector<T>::iterator end = targetBucket->end();
         if (std::next(targetBucket) == buckets.end()) {
@@ -390,6 +392,7 @@ public:
                 targetBucket = sentinelBucket;
             }
         }
+        assert(targetBucket != buckets.end());
         // Find insertion point within targetBucket
         typename std::vector<T>::iterator targ = targetBucket->begin();
         while (targ != targetBucket->end() &&

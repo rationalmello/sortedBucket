@@ -17,6 +17,12 @@ To run the demo, simply go into the ```src``` folder and compile and run
 ```demo.cpp```. This gives you a general idea of the container shape and how
 the implementations differ.
 
+If you want to see an example problem that this container can solve, try using it to
+solve this Leetcode problem: https://leetcode.com/problems/count-of-smaller-numbers-after-self/
+
+The specifics of the implementation are left as an exercise, but it should be very simple
+with the container's provided interface. 
+
 ## Benchmarking
 
 ### Getting started

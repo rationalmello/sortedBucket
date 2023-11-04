@@ -268,6 +268,7 @@ public:
                 targetBucket = sentinelBucket;
             }
         }
+        assert(targetBucket != buckets.end());
         // Find insertion point within targetBucket
         typename std::list<T>::iterator targ = targetBucket->begin();
         while (targ != targetBucket->end() &&
@@ -302,6 +303,7 @@ public:
                 targetBucket = sentinelBucket;
             }
         }
+        assert(targetBucket != buckets.end());
         // Find insertion point within targetBucket
         typename std::list<T>::iterator targ = targetBucket->begin();
         while (targ != targetBucket->end() && 
@@ -356,6 +358,7 @@ public:
                 targetBucket = sentinelBucket;
             }
         }
+        assert(targetBucket != buckets.end());
         // Find insertion point within targetBucket
         typename std::list<T>::iterator targ = targetBucket->begin();
         while (targ != targetBucket->end() &&
